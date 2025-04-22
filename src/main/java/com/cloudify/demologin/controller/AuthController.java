@@ -4,7 +4,6 @@ import com.cloudify.demologin.dto.request.ForgotPasswordRequest;
 import com.cloudify.demologin.dto.request.LoginRequest;
 import com.cloudify.demologin.dto.request.ResetPasswordRequest;
 import com.cloudify.demologin.dto.request.SignupRequest;
-import com.cloudify.demologin.dto.request.VerifyOtpRequest;
 import com.cloudify.demologin.dto.response.BaseResponse;
 import com.cloudify.demologin.dto.response.LoginResponse;
 import com.cloudify.demologin.service.AuthService;
@@ -52,17 +51,6 @@ public class AuthController {
         return ResponseEntity.ok(
                 BaseResponse.builder()
                         .message("OTP sent to email for password reset")
-                        .build()
-        );
-    }
-    
-    @PostMapping("/verify-otp")
-    public ResponseEntity<?> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
-        boolean verified = authService.verifyOtp(request);
-        return ResponseEntity.ok(
-                BaseResponse.builder()
-                        .message("OTP verification " + (verified ? "successful" : "failed"))
-                        .data(verified)
                         .build()
         );
     }

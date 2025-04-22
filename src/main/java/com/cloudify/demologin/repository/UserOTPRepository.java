@@ -16,7 +16,5 @@ public interface UserOTPRepository extends JpaRepository<UserOTP, UUID> {
     
     Optional<UserOTP> findByEmailAndOtpAndIsVerifiedFalseAndExpirationTimeAfter(
             String email, String otp, LocalDateTime now);
-            
-    void deleteByExpirationTimeBefore(LocalDateTime now);
 }
 

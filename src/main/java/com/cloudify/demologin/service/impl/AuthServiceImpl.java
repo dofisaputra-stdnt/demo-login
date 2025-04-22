@@ -101,11 +101,6 @@ public class AuthServiceImpl implements AuthService {
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         userRepository.save(user);
     }
-
-    @Override
-    public void sendVerificationOtp(String email) {
-        // Implement email verification logic here
-    }
     
     @Override
     @Transactional
@@ -137,23 +132,6 @@ public class AuthServiceImpl implements AuthService {
     
     @Override
     @Transactional
-    public boolean verifyOtp(VerifyOtpRequest request) {
-        UserOTP userOTP = userOTPRepository
-                .findByEmailAndOtpAndIsVerifiedFalseAndExpirationTimeAfter(
-                        request.getEmail(), 
-                        request.getOtp(), 
-                        LocalDateTime.now())
-                .orElseThrow(() -> new SecurityException("Invalid or expired OTP"));
-        
-        // Mark OTP as verified
-        userOTP.setVerified(true);
-        userOTPRepository.save(userOTP);
-        
-        return true;
-    }
-    
-    @Override
-    @Transactional
     public void resetPassword(ResetPasswordRequest request) {
         // Verify OTP first
         VerifyOtpRequest verifyRequest = new VerifyOtpRequest(request.getEmail(), request.getOtp());
@@ -173,6 +151,21 @@ public class AuthServiceImpl implements AuthService {
         
         // Delete the used OTP
         userOTPRepository.findByEmail(request.getEmail()).ifPresent(userOTPRepository::delete);
+    }
+
+    private boolean verifyOtp(VerifyOtpRequest request) {
+        UserOTP userOTP = userOTPRepository
+                .findByEmailAndOtpAndIsVerifiedFalseAndExpirationTimeAfter(
+                        request.getEmail(),
+                        request.getOtp(),
+                        LocalDateTime.now())
+                .orElseThrow(() -> new SecurityException("Invalid or expired OTP"));
+
+        // Mark OTP as verified
+        userOTP.setVerified(true);
+        userOTPRepository.save(userOTP);
+
+        return true;
     }
     
     private String generateOTP() {

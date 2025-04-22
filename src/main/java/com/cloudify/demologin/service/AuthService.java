@@ -11,12 +11,8 @@ public interface AuthService {
     LoginResponse login(LoginRequest request);
 
     void signup(SignupRequest request);
-
-    void sendVerificationOtp(String email);
     
     void forgotPassword(ForgotPasswordRequest request);
-    
-    boolean verifyOtp(VerifyOtpRequest request);
     
     void resetPassword(ResetPasswordRequest request);
 }
