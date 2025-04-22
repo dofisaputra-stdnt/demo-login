@@ -1,19 +1,32 @@
 package com.cloudify.demologin.service.impl;
 
+import com.cloudify.demologin.dto.request.ForgotPasswordRequest;
 import com.cloudify.demologin.dto.request.LoginRequest;
+import com.cloudify.demologin.dto.request.ResetPasswordRequest;
 import com.cloudify.demologin.dto.request.SignupRequest;
+import com.cloudify.demologin.dto.request.VerifyOtpRequest;
 import com.cloudify.demologin.dto.response.LoginResponse;
 import com.cloudify.demologin.entity.User;
+import com.cloudify.demologin.entity.UserOTP;
+import com.cloudify.demologin.repository.UserOTPRepository;
 import com.cloudify.demologin.repository.UserRepository;
 import com.cloudify.demologin.security.JwtService;
 import com.cloudify.demologin.service.AuthService;
+import com.cloudify.demologin.util.MailUtil;
+import jakarta.mail.MessagingException;
 import jakarta.persistence.EntityExistsException;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
+import java.util.Random;
 
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -22,17 +35,24 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
+    private final UserOTPRepository userOTPRepository;
+    private final MailUtil mailUtil;
+    private final Random random = new SecureRandom();
 
     public AuthServiceImpl(
             AuthenticationManager authenticationManager,
             JwtService jwtService,
             PasswordEncoder passwordEncoder,
-            UserRepository userRepository
+            UserRepository userRepository,
+            UserOTPRepository userOTPRepository,
+            MailUtil mailUtil
     ) {
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
         this.userRepository = userRepository;
+        this.userOTPRepository = userOTPRepository;
+        this.mailUtil = mailUtil;
     }
 
     @Override
@@ -84,6 +104,84 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void sendVerificationOtp(String email) {
-
+        // Implement email verification logic here
+    }
+    
+    @Override
+    @Transactional
+    public void forgotPassword(ForgotPasswordRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new EntityNotFoundException("User not found with email: " + request.getEmail()));
+        
+        // Generate OTP (6 digit)
+        String otp = generateOTP();
+        
+        // Check if OTP already exists for the user
+        userOTPRepository.findByEmail(user.getEmail()).ifPresent(userOTPRepository::delete);
+        
+        // Create new OTP entry
+        UserOTP userOTP = new UserOTP();
+        userOTP.setEmail(user.getEmail());
+        userOTP.setOtp(otp);
+        userOTP.setExpirationTime(LocalDateTime.now().plusMinutes(30)); // 30 minutes expiry
+        userOTP.setVerified(false);
+        
+        userOTPRepository.save(userOTP);
+        
+        try {
+            mailUtil.sendOtpEmail(user.getEmail(), otp);
+        } catch (MessagingException e) {
+            throw new RuntimeException("Failed to send OTP email", e);
+        }
+    }
+    
+    @Override
+    @Transactional
+    public boolean verifyOtp(VerifyOtpRequest request) {
+        UserOTP userOTP = userOTPRepository
+                .findByEmailAndOtpAndIsVerifiedFalseAndExpirationTimeAfter(
+                        request.getEmail(), 
+                        request.getOtp(), 
+                        LocalDateTime.now())
+                .orElseThrow(() -> new SecurityException("Invalid or expired OTP"));
+        
+        // Mark OTP as verified
+        userOTP.setVerified(true);
+        userOTPRepository.save(userOTP);
+        
+        return true;
+    }
+    
+    @Override
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        // Verify OTP first
+        VerifyOtpRequest verifyRequest = new VerifyOtpRequest(request.getEmail(), request.getOtp());
+        boolean verified = verifyOtp(verifyRequest);
+        
+        if (!verified) {
+            throw new SecurityException("Invalid or expired OTP");
+        }
+        
+        // Update password
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new EntityNotFoundException("User not found with email: " + request.getEmail()));
+        
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setLoginAttempts(0); // Reset login attempts
+        userRepository.save(user);
+        
+        // Delete the used OTP
+        userOTPRepository.findByEmail(request.getEmail()).ifPresent(userOTPRepository::delete);
+    }
+    
+    private String generateOTP() {
+        // Generate 6-digit OTP
+        int otpLength = 6;
+        StringBuilder otp = new StringBuilder();
+        for (int i = 0; i < otpLength; i++) {
+            otp.append(random.nextInt(10));
+        }
+        return otp.toString();
     }
 }
