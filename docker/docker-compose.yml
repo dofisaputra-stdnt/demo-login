@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  spring-app:
+    build: .
+    container_name: demo-login
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Jakarta
+    networks:
+      - demo-login-net
+
+networks:
+  demo-login-net:
+    external: true
