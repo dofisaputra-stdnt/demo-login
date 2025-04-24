@@ -2,6 +2,7 @@ package com.cloudify.demologin.controller;
 
 import com.cloudify.demologin.dto.response.BaseResponse;
 import jakarta.persistence.EntityExistsException;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -17,6 +18,14 @@ public class AdvisorController {
     @ExceptionHandler(value = SecurityException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public BaseResponse<?> handleSecurityException(SecurityException e) {
+        return BaseResponse.builder()
+                .message(e.getMessage())
+                .build();
+    }
+
+    @ExceptionHandler(value = EntityNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public BaseResponse<?> handleEntityNotFoundException(EntityNotFoundException e) {
         return BaseResponse.builder()
                 .message(e.getMessage())
                 .build();
