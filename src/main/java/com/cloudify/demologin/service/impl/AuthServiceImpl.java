@@ -6,6 +6,7 @@ import com.cloudify.demologin.dto.request.ResetPasswordRequest;
 import com.cloudify.demologin.dto.request.SignupRequest;
 import com.cloudify.demologin.dto.request.VerifyOtpRequest;
 import com.cloudify.demologin.dto.response.LoginResponse;
+import com.cloudify.demologin.entity.Store;
 import com.cloudify.demologin.entity.User;
 import com.cloudify.demologin.entity.UserOTP;
 import com.cloudify.demologin.repository.UserOTPRepository;
@@ -16,6 +17,7 @@ import com.cloudify.demologin.util.MailUtil;
 import jakarta.mail.MessagingException;
 import jakarta.persistence.EntityExistsException;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -38,6 +40,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserOTPRepository userOTPRepository;
     private final MailUtil mailUtil;
     private final Random random = new SecureRandom();
+    private final JdbcTemplate jdbcTemplate;
 
     public AuthServiceImpl(
             AuthenticationManager authenticationManager,
@@ -45,14 +48,16 @@ public class AuthServiceImpl implements AuthService {
             PasswordEncoder passwordEncoder,
             UserRepository userRepository,
             UserOTPRepository userOTPRepository,
-            MailUtil mailUtil
-    ) {
+            MailUtil mailUtil,
+            JdbcTemplate jdbcTemplate
+            ) {
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
         this.userRepository = userRepository;
         this.userOTPRepository = userOTPRepository;
         this.mailUtil = mailUtil;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
@@ -85,7 +90,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         SecurityContextHolder.getContext().setAuthentication(authenticationResponse);
-        String token = jwtService.generateToken(request.getUsername());
+        String token = jwtService.generateToken(user.getUsername(), user.getStore().getName());
         return new LoginResponse(token);
     }
 
@@ -99,56 +104,76 @@ public class AuthServiceImpl implements AuthService {
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
+
+        Store store = new Store();
+        String storeName = request.getStore().getName();
+        store.setName(storeName);
+        store.setLocation(request.getStore().getLocation());
+        user.setStore(store);
+
+        String schemaName = storeName.trim().toLowerCase().replaceAll("\\s+", "_");
+        String createSchemaQuery = "CREATE SCHEMA IF NOT EXISTS " + schemaName;
+        jdbcTemplate.execute(createSchemaQuery);
+
+        String createProductsTableSQL = """
+                    CREATE TABLE IF NOT EXISTS %s.products (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        name VARCHAR(255) NOT NULL,
+                        price DOUBLE PRECISION NOT NULL,
+                        description TEXT
+                    )
+                """.formatted(schemaName);
+        jdbcTemplate.execute(createProductsTableSQL);
         userRepository.save(user);
     }
-    
+
     @Override
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new EntityNotFoundException("User not found with email: " + request.getEmail()));
-        
+
         // Generate OTP (6 digit)
         String otp = generateOTP();
-        
+
         // Check if OTP already exists for the user
         userOTPRepository.findByEmail(user.getEmail()).ifPresent(userOTPRepository::delete);
-        
+
         // Create new OTP entry
         UserOTP userOTP = new UserOTP();
         userOTP.setEmail(user.getEmail());
         userOTP.setOtp(otp);
         userOTP.setExpirationTime(LocalDateTime.now().plusMinutes(30)); // 30 minutes expiry
         userOTP.setVerified(false);
-        
+
         userOTPRepository.save(userOTP);
-        
+
         try {
             mailUtil.sendOtpEmail(user.getEmail(), otp);
         } catch (MessagingException e) {
             throw new RuntimeException("Failed to send OTP email", e);
         }
     }
-    
+
     @Override
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
         // Verify OTP first
         VerifyOtpRequest verifyRequest = new VerifyOtpRequest(request.getEmail(), request.getOtp());
         boolean verified = verifyOtp(verifyRequest);
-        
+
         if (!verified) {
             throw new SecurityException("Invalid or expired OTP");
         }
-        
+
         // Update password
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new EntityNotFoundException("User not found with email: " + request.getEmail()));
-        
+
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setLoginAttempts(0); // Reset login attempts
         userRepository.save(user);
-        
+
         // Delete the used OTP
         userOTPRepository.findByEmail(request.getEmail()).ifPresent(userOTPRepository::delete);
     }
@@ -167,7 +192,7 @@ public class AuthServiceImpl implements AuthService {
 
         return true;
     }
-    
+
     private String generateOTP() {
         // Generate 6-digit OTP
         int otpLength = 6;

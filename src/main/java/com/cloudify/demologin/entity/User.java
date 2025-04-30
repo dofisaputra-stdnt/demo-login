@@ -32,4 +32,8 @@ public class User {
 
     @Column(name = "login_attempts", nullable = false, columnDefinition = "int default 0")
     private int loginAttempts;
+
+    @ManyToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JoinColumn(name = "store_id", nullable = false)
+    private Store store;
 }
