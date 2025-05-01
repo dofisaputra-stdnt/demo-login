@@ -35,6 +35,18 @@ public class MinioUtil {
         return buildPublicUrl(bucketName, fileName);
     }
 
+    public void deleteFile(String bucketName, String fileName) {
+        try {
+            minioClient.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(fileName + ".jpg")
+                            .build()
+            );
+        } catch (Exception ignored) {
+        }
+    }
+
     private String buildPublicUrl(String bucketName, String fileName) {
         return minioUrl + "/" + bucketName + "/" + fileName + ".jpg";
     }

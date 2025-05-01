@@ -94,7 +94,7 @@ public class ProductController {
                     )
             )
     )
-    @PutMapping("/{id}")
+    @PutMapping(value = "/{id}", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<?> updateProduct(
             @Valid @RequestPart("data") ProductRequest request,
             @RequestPart("file") MultipartFile file,

@@ -109,6 +109,8 @@ public class ProductServiceImpl implements ProductService {
     public void deleteProduct(UUID id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
+
+        minioUtil.deleteFile(productBucket, product.getId().toString());
         productRepository.delete(product);
     }
 }
