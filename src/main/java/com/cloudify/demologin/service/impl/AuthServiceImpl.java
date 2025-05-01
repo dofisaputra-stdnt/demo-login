@@ -17,6 +17,7 @@ import com.cloudify.demologin.util.MailUtil;
 import jakarta.mail.MessagingException;
 import jakarta.persistence.EntityExistsException;
 import jakarta.persistence.EntityNotFoundException;
+import org.flywaydb.core.Flyway;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -115,15 +116,14 @@ public class AuthServiceImpl implements AuthService {
         String createSchemaQuery = "CREATE SCHEMA IF NOT EXISTS " + schemaName;
         jdbcTemplate.execute(createSchemaQuery);
 
-        String createProductsTableSQL = """
-                    CREATE TABLE IF NOT EXISTS %s.products (
-                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                        name VARCHAR(255) NOT NULL,
-                        price DOUBLE PRECISION NOT NULL,
-                        description TEXT
-                    )
-                """.formatted(schemaName);
-        jdbcTemplate.execute(createProductsTableSQL);
+        Flyway flyway = Flyway.configure()
+                .dataSource(jdbcTemplate.getDataSource())
+                .schemas(schemaName)
+                .locations("classpath:db/migration")
+                .baselineOnMigrate(true)
+                .load();
+
+        flyway.migrate();
         userRepository.save(user);
     }
 

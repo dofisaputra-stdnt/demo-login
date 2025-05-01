@@ -8,12 +8,20 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class AdvisorController {
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public BaseResponse<?> handleMaxSizeException(MaxUploadSizeExceededException exc) {
+        return BaseResponse.builder()
+                .message("File size exceeds limit")
+                .build();
+    }
 
     @ExceptionHandler(value = SecurityException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)

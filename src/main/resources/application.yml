@@ -1,0 +1,47 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: demo-login
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/demo_login
+    username: postgres
+    password: postgres
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: your-email@gmail.com
+    password: your-email-app-password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
+  flyway:
+    enabled: false
+
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
+
+jwt:
+  secret:
+    key: 661292b9574747d2ad612236d91669569153cd58def4cda8a0170254607b0fe72ec24d20f546efae498a7cf23640a3609488f6318dc6c4f704b47c75288b46cce973a10033088625649b782fb9a9e3bd8629f284a7e32a713216203c3bc4b24f2405d0eb76f93723b08b049ea8b82ccfd0cb309c3d80703196744a3ca9b03b3a
+  expiration: 60
