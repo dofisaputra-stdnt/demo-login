@@ -29,8 +29,7 @@ public class FlywayMigrator implements ApplicationRunner {
             Flyway flyway = Flyway.configure()
                     .dataSource(dataSource)
                     .schemas(schemaName)
-                    .locations("classpath:db/migration")
-                    .baselineOnMigrate(true)
+                    .locations("classpath:db/migration/tenant")
                     .load();
             flyway.migrate();
         });

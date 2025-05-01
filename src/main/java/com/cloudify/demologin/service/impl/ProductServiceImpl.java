@@ -1,33 +1,53 @@
 package com.cloudify.demologin.service.impl;
 
 import com.cloudify.demologin.dto.request.ProductRequest;
+import com.cloudify.demologin.dto.response.PageResponse;
 import com.cloudify.demologin.dto.response.ProductResponse;
 import com.cloudify.demologin.entity.Product;
 import com.cloudify.demologin.repository.ProductRepository;
 import com.cloudify.demologin.service.ProductService;
+import com.cloudify.demologin.util.MinioUtil;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
+    private final MinioUtil minioUtil;
 
-    public ProductServiceImpl(ProductRepository productRepository) {
+    public ProductServiceImpl(ProductRepository productRepository, MinioUtil minioUtil) {
         this.productRepository = productRepository;
+        this.minioUtil = minioUtil;
     }
 
+    @Value("${minio.bucket.product}")
+    private String productBucket;
+
+    @Transactional
     @Override
-    public void addProduct(ProductRequest request) {
+    public void addProduct(ProductRequest request, MultipartFile file) {
         Product product = new Product();
         product.setName(request.getName());
         product.setPrice(request.getPrice());
         product.setDescription(request.getDescription());
         productRepository.save(product);
+
+        try {
+            String imageUrl = minioUtil.uploadFile(productBucket, product.getId().toString(), file);
+            product.setImageUrl(imageUrl);
+            productRepository.save(product);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to upload file to MinIO", e);
+        }
     }
 
     @Override
@@ -40,30 +60,49 @@ public class ProductServiceImpl implements ProductService {
                 .name(product.getName())
                 .price(product.getPrice())
                 .description(product.getDescription())
+                .imageUrl(product.getImageUrl())
                 .build();
     }
 
     @Override
-    public Page<ProductResponse> getAllProducts(int page, int size) {
+    public PageResponse<ProductResponse> getAllProducts(int page, int size) {
         int pageNumber = Math.max(page - 1, 0);
-        return productRepository.findAll(PageRequest.of(pageNumber, size))
-                .map(product -> ProductResponse.builder()
+        Page<Product> products = productRepository.findAll(PageRequest.of(pageNumber, size));
+        List<ProductResponse> productResponses = products.getContent().stream().map(
+                product -> ProductResponse.builder()
                         .id(product.getId().toString())
                         .name(product.getName())
                         .price(product.getPrice())
                         .description(product.getDescription())
-                        .build());
+                        .imageUrl(product.getImageUrl())
+                        .build()
+        ).toList();
+        return PageResponse.<ProductResponse>builder()
+                .page(page)
+                .size(size)
+                .totalElements(products.getTotalElements())
+                .totalPages(products.getTotalPages())
+                .content(productResponses)
+                .build();
     }
 
+    @Transactional
     @Override
-    public void updateProduct(ProductRequest product, UUID id) {
+    public void updateProduct(ProductRequest product, MultipartFile file, UUID id) {
         Product existingProduct = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
 
         existingProduct.setName(product.getName());
         existingProduct.setPrice(product.getPrice());
         existingProduct.setDescription(product.getDescription());
-        productRepository.save(existingProduct);
+
+        try {
+            String imageUrl = minioUtil.uploadFile(productBucket, existingProduct.getId().toString(), file);
+            existingProduct.setImageUrl(imageUrl);
+            productRepository.save(existingProduct);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to upload file to MinIO", e);
+        }
     }
 
     @Override

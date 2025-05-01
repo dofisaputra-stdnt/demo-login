@@ -119,8 +119,7 @@ public class AuthServiceImpl implements AuthService {
         Flyway flyway = Flyway.configure()
                 .dataSource(jdbcTemplate.getDataSource())
                 .schemas(schemaName)
-                .locations("classpath:db/migration")
-                .baselineOnMigrate(true)
+                .locations("classpath:db/migration/tenant")
                 .load();
 
         flyway.migrate();
