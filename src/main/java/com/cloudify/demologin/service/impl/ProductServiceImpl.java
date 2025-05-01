@@ -6,6 +6,7 @@ import com.cloudify.demologin.dto.response.ProductResponse;
 import com.cloudify.demologin.entity.Product;
 import com.cloudify.demologin.repository.ProductRepository;
 import com.cloudify.demologin.service.ProductService;
+import com.cloudify.demologin.util.ImageUtil;
 import com.cloudify.demologin.util.MinioUtil;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,10 +24,12 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final MinioUtil minioUtil;
+    private final ImageUtil imageUtil;
 
-    public ProductServiceImpl(ProductRepository productRepository, MinioUtil minioUtil) {
+    public ProductServiceImpl(ProductRepository productRepository, MinioUtil minioUtil, ImageUtil imageUtil) {
         this.productRepository = productRepository;
         this.minioUtil = minioUtil;
+        this.imageUtil = imageUtil;
     }
 
     @Value("${minio.bucket.product}")
@@ -40,14 +43,7 @@ public class ProductServiceImpl implements ProductService {
         product.setPrice(request.getPrice());
         product.setDescription(request.getDescription());
         productRepository.save(product);
-
-        try {
-            String imageUrl = minioUtil.uploadFile(productBucket, product.getId().toString(), file);
-            product.setImageUrl(imageUrl);
-            productRepository.save(product);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to upload file to MinIO", e);
-        }
+        saveProductImage(file, product);
     }
 
     @Override
@@ -95,9 +91,13 @@ public class ProductServiceImpl implements ProductService {
         existingProduct.setName(product.getName());
         existingProduct.setPrice(product.getPrice());
         existingProduct.setDescription(product.getDescription());
+        saveProductImage(file, existingProduct);
+    }
 
+    private void saveProductImage(MultipartFile file, Product existingProduct) {
         try {
-            String imageUrl = minioUtil.uploadFile(productBucket, existingProduct.getId().toString(), file);
+            byte[] compressedFile = imageUtil.compressImage(file);
+            String imageUrl = minioUtil.uploadFile(productBucket, existingProduct.getId().toString(), compressedFile);
             existingProduct.setImageUrl(imageUrl);
             productRepository.save(existingProduct);
         } catch (Exception e) {

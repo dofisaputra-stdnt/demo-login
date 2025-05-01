@@ -21,7 +21,7 @@ public class AdvisorController {
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public BaseResponse<?> handleRuntimeException(RuntimeException e) {
         return BaseResponse.builder()
-                .message("Internal Server Error")
+                .message(e.getMessage())
                 .build();
     }
 
