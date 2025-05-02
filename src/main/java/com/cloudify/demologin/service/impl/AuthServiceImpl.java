@@ -12,6 +12,7 @@ import com.cloudify.demologin.repository.UserOTPRepository;
 import com.cloudify.demologin.repository.UserRepository;
 import com.cloudify.demologin.security.JwtService;
 import com.cloudify.demologin.service.AuthService;
+import com.cloudify.demologin.util.MQUtil;
 import com.cloudify.demologin.util.MailUtil;
 import jakarta.mail.MessagingException;
 import jakarta.persistence.EntityExistsException;
@@ -37,6 +38,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final UserOTPRepository userOTPRepository;
     private final MailUtil mailUtil;
+    private final MQUtil mqUtil;
     private final Random random = new SecureRandom();
 
     public AuthServiceImpl(
@@ -45,7 +47,8 @@ public class AuthServiceImpl implements AuthService {
             PasswordEncoder passwordEncoder,
             UserRepository userRepository,
             UserOTPRepository userOTPRepository,
-            MailUtil mailUtil
+            MailUtil mailUtil,
+            MQUtil mqUtil
     ) {
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
@@ -53,6 +56,7 @@ public class AuthServiceImpl implements AuthService {
         this.userRepository = userRepository;
         this.userOTPRepository = userOTPRepository;
         this.mailUtil = mailUtil;
+        this.mqUtil = mqUtil;
     }
 
     @Override
@@ -86,6 +90,11 @@ public class AuthServiceImpl implements AuthService {
 
         SecurityContextHolder.getContext().setAuthentication(authenticationResponse);
         String token = jwtService.generateToken(request.getUsername());
+
+        // Send user success log to rabbitmq pipe
+        this.mqUtil.setQueue("apps-log", "apps-log-exch");
+        this.mqUtil.sendMessage(String.format("login_success|%s|%s", user.getId().toString(), user.getEmail()));
+
         return new LoginResponse(token);
     }
 
