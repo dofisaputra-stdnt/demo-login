@@ -37,5 +37,6 @@ out/
 .vscode/
 
 ### Properties ###
+/src/main/resources/*.yml
 *.properties
 *.jar

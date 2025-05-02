@@ -1,6 +1,7 @@
 package com.cloudify.demologin.security;
 
 
+import com.cloudify.demologin.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -23,9 +24,11 @@ public class JwtService {
 
     private Claims claims;
 
-    public String generateToken(String username) {
+    public String generateToken(String username, String tenant) {
+        tenant = tenant.trim().toLowerCase().replaceAll("\\s+", "_");
         return Jwts.builder()
                 .subject(username)
+                .audience().add(tenant).and()
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + expiration * 60 * 1000))
                 .signWith(getSignInKey())
@@ -51,5 +54,9 @@ public class JwtService {
 
     public String extractUsername() {
         return claims.getSubject();
+    }
+
+    public String extractTenant() {
+        return claims.getAudience().iterator().next();
     }
 }

@@ -1,5 +1,6 @@
 package com.cloudify.demologin.security;
 
+import com.cloudify.demologin.config.tenant.TenantIdentifierResolver;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 @Component
 public class JwtRequestFilter extends OncePerRequestFilter {
@@ -24,6 +26,11 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     public JwtRequestFilter(JwtService jwtService, UserDetailsServiceImpl userDetailsService) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
+        return isMatchPublicPaths(request);
     }
 
     @Override
@@ -41,9 +48,12 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         try {
             String jwt = authHeader.substring(7);
             jwtService.validateToken(jwt);
-            String username = jwtService.extractUsername();
 
+            String username = jwtService.extractUsername();
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+            String tenant = jwtService.extractTenant();
+            TenantIdentifierResolver.setCurrentTenant(tenant);
 
             UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
             authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
@@ -54,6 +64,22 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         } catch (Exception e) {
             logger.error("Invalid JWT token: {}");
         }
-        filterChain.doFilter(request, response);
+
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            TenantIdentifierResolver.setCurrentTenant("public");
+        }
+    }
+
+    private static boolean isMatchPublicPaths(HttpServletRequest request) {
+        return Arrays.stream(AuthHelper.PUBLIC_PATHS).anyMatch(e -> isMatchWithStar(e, request.getServletPath()));
+    }
+
+    private static boolean isMatchWithStar(String a, String b){
+        String star = "*";
+        a = a.replace(star, "");
+        b = b.substring(0, Math.min(b.length(), a.length()));
+        return a.equals(b);
     }
 }

@@ -18,13 +18,13 @@ public class HomeController {
         this.homeService = homeService;
     }
 
-    @GetMapping()
+    @GetMapping
     public ResponseEntity<?> home() {
-        HomeResponse data = homeService.getHome();
+//        HomeResponse data = homeService.getHome();
         return ResponseEntity.ok(
                 BaseResponse.builder()
                         .message("Welcome to the home page")
-                        .data(data)
+//                        .data(data)
                         .build()
         );
     }

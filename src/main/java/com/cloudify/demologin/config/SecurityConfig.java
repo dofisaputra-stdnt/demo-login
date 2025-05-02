@@ -1,5 +1,6 @@
 package com.cloudify.demologin.config;
 
+import com.cloudify.demologin.security.AuthHelper;
 import com.cloudify.demologin.security.JwtAuthenticationEntryPoint;
 import com.cloudify.demologin.security.JwtRequestFilter;
 import org.springframework.context.annotation.Bean;
@@ -16,6 +17,10 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+
+import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -32,6 +37,7 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                .cors(httpSecurityCorsConfigurer -> corsConfiguration())
                 .csrf(AbstractHttpConfigurer::disable)
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(exceptionHandling ->
@@ -39,12 +45,9 @@ public class SecurityConfig {
                                 .authenticationEntryPoint(entryPoint)
                 )
                 .authorizeHttpRequests((auth) ->
-                        auth.requestMatchers(
-                                        "/api/auth/**",
-                                        "/v3/api-docs/**",
-                                        "/swagger-ui/**",
-                                        "/swagger-ui.html"
-                                ).permitAll()
+                        auth.requestMatchers(AuthHelper.PUBLIC_PATHS).permitAll()
+                                .requestMatchers("/api/stores/**").hasRole("ADMIN")
+                                .requestMatchers("/api/products/**").hasRole("CUSTOMER")
                                 .anyRequest().authenticated()
                 )
                 .sessionManagement(manager -> manager
@@ -64,5 +67,14 @@ public class SecurityConfig {
     @Bean
     public static PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public CorsConfiguration corsConfiguration() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of("*"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "PATCH", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+        return configuration;
     }
 }

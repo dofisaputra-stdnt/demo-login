@@ -10,12 +10,12 @@ import lombok.Setter;
 import java.util.UUID;
 
 @Entity
-@Table(name = "users")
+@Table(name = "customers")
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class User implements LoginTrackable {
+public class Customer implements LoginTrackable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
