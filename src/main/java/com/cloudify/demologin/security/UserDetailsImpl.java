@@ -25,14 +25,14 @@ public class UserDetailsImpl implements UserDetails {
     private String password;
     private Collection<? extends GrantedAuthority> authorities;
 
-    public static UserDetailsImpl create(User user) {
+    public static UserDetailsImpl create(UUID id, String username, String password, String role) {
         List<GrantedAuthority> authorities = Collections.
-                singletonList(new SimpleGrantedAuthority("ROLE_USER"));
+                singletonList(new SimpleGrantedAuthority("ROLE_" + role));
 
         return new UserDetailsImpl(
-                user.getId(),
-                user.getUsername(),
-                user.getPassword(),
+                id,
+                username,
+                password,
                 authorities
         );
     }

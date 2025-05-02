@@ -29,6 +29,9 @@ public class Store {
     @Column(name = "location", nullable = false)
     private String location;
 
-    @OneToMany(mappedBy = "store", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "store", orphanRemoval = true, fetch = FetchType.LAZY)
     private List<User> users = new ArrayList<>();
+
+    @OneToMany(mappedBy = "store", orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<Customer> customers = new ArrayList<>();
 }

@@ -18,6 +18,18 @@ CREATE TABLE users
     email          VARCHAR(255) NOT NULL UNIQUE,
     password       VARCHAR(255) NOT NULL,
     login_attempts INT          NOT NULL DEFAULT 0,
+    store_id       UUID         NULL,
+    CONSTRAINT fk_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
+);
+
+-- Create table users
+CREATE TABLE customers
+(
+    id             UUID PRIMARY KEY      DEFAULT gen_random_uuid(),
+    username       VARCHAR(255) NOT NULL UNIQUE,
+    email          VARCHAR(255) NOT NULL UNIQUE,
+    password       VARCHAR(255) NOT NULL,
+    login_attempts INT          NOT NULL DEFAULT 0,
     store_id       UUID         NOT NULL,
     CONSTRAINT fk_store FOREIGN KEY (store_id) REFERENCES stores (id) ON DELETE CASCADE
 );

@@ -7,6 +7,7 @@ import com.cloudify.demologin.dto.request.SignupRequest;
 import com.cloudify.demologin.dto.response.BaseResponse;
 import com.cloudify.demologin.dto.response.LoginResponse;
 import com.cloudify.demologin.service.AuthService;
+import com.cloudify.demologin.util.AppConstant;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,9 +22,12 @@ public class AuthController {
         this.authService = authService;
     }
 
-    @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
-        LoginResponse data = authService.login(request);
+    @PostMapping("/{role}/login")
+    public ResponseEntity<?> login(
+            @Valid @RequestBody LoginRequest request,
+            @PathVariable AppConstant.AuthRole role
+    ) {
+        LoginResponse data = authService.login(request, role);
         return ResponseEntity.ok(
                 BaseResponse.builder()
                         .message("Login successful")
@@ -32,29 +36,38 @@ public class AuthController {
         );
     }
 
-    @PostMapping("/signup")
-    public ResponseEntity<?> signup(@Valid @RequestBody SignupRequest request) {
-        authService.signup(request);
+    @PostMapping("/{role}/signup")
+    public ResponseEntity<?> signup(
+            @Valid @RequestBody SignupRequest request,
+            @PathVariable AppConstant.AuthRole role
+    ) {
+        authService.signup(request, role);
         return ResponseEntity.ok(
                 BaseResponse.builder()
                         .message("Signup successful")
                         .build()
         );
     }
-    
-    @PostMapping("/forgot-password")
-    public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        authService.forgotPassword(request);
+
+    @PostMapping("/{role}/forgot-password")
+    public ResponseEntity<?> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request,
+            @PathVariable AppConstant.AuthRole role
+    ) {
+        authService.forgotPassword(request, role);
         return ResponseEntity.ok(
                 BaseResponse.builder()
                         .message("OTP sent to email for password reset")
                         .build()
         );
     }
-    
-    @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        authService.resetPassword(request);
+
+    @PostMapping("/{role}/reset-password")
+    public ResponseEntity<?> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request,
+            @PathVariable AppConstant.AuthRole role
+    ) {
+        authService.resetPassword(request, role);
         return ResponseEntity.ok(
                 BaseResponse.builder()
                         .message("Password reset successful")

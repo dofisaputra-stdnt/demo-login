@@ -4,6 +4,8 @@ import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.UUID;
+
 @Getter
 @Setter
 public class SignupRequest {
@@ -18,6 +20,5 @@ public class SignupRequest {
     @Size(min = 8, message = "Password must be at least 8 characters long")
     private String password;
 
-    @NotNull
-    private StoreRequest store;
+    private UUID storeId;
 }

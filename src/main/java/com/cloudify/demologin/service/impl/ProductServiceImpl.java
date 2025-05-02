@@ -73,6 +73,7 @@ public class ProductServiceImpl implements ProductService {
                         .imageUrl(product.getImageUrl())
                         .build()
         ).toList();
+
         return PageResponse.<ProductResponse>builder()
                 .page(page)
                 .size(size)

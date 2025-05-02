@@ -6,19 +6,23 @@ import com.cloudify.demologin.dto.request.ResetPasswordRequest;
 import com.cloudify.demologin.dto.request.SignupRequest;
 import com.cloudify.demologin.dto.request.VerifyOtpRequest;
 import com.cloudify.demologin.dto.response.LoginResponse;
+import com.cloudify.demologin.entity.Customer;
 import com.cloudify.demologin.entity.Store;
 import com.cloudify.demologin.entity.User;
 import com.cloudify.demologin.entity.UserOTP;
+import com.cloudify.demologin.repository.CustomerRepository;
+import com.cloudify.demologin.repository.StoreRepository;
 import com.cloudify.demologin.repository.UserOTPRepository;
 import com.cloudify.demologin.repository.UserRepository;
 import com.cloudify.demologin.security.JwtService;
 import com.cloudify.demologin.service.AuthService;
+import com.cloudify.demologin.util.AppConstant;
+import com.cloudify.demologin.util.LoginTrackable;
 import com.cloudify.demologin.util.MailUtil;
 import jakarta.mail.MessagingException;
 import jakarta.persistence.EntityExistsException;
 import jakarta.persistence.EntityNotFoundException;
-import org.flywaydb.core.Flyway;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -30,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Random;
+import java.util.UUID;
 
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -41,7 +46,8 @@ public class AuthServiceImpl implements AuthService {
     private final UserOTPRepository userOTPRepository;
     private final MailUtil mailUtil;
     private final Random random = new SecureRandom();
-    private final JdbcTemplate jdbcTemplate;
+    private final StoreRepository storeRepository;
+    private final CustomerRepository customerRepository;
 
     public AuthServiceImpl(
             AuthenticationManager authenticationManager,
@@ -50,97 +56,123 @@ public class AuthServiceImpl implements AuthService {
             UserRepository userRepository,
             UserOTPRepository userOTPRepository,
             MailUtil mailUtil,
-            JdbcTemplate jdbcTemplate
-            ) {
+            StoreRepository storeRepository,
+            CustomerRepository customerRepository) {
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
         this.userRepository = userRepository;
         this.userOTPRepository = userOTPRepository;
         this.mailUtil = mailUtil;
-        this.jdbcTemplate = jdbcTemplate;
+        this.storeRepository = storeRepository;
+        this.customerRepository = customerRepository;
     }
 
     @Override
-    public LoginResponse login(LoginRequest request) {
-        final String errorMessage = "Invalid username or password";
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new SecurityException(errorMessage));
-
-        // Check if the user is locked out
-        if (user.getLoginAttempts() >= 3) {
-            throw new SecurityException("Account locked due to too many failed login attempts");
-        }
-
-        // Authenticate the user
-        Authentication authenticationRequest;
+    public LoginResponse login(LoginRequest request, AppConstant.AuthRole role) {
         Authentication authenticationResponse;
-        try {
-            authenticationRequest = UsernamePasswordAuthenticationToken.unauthenticated(request.getUsername(), request.getPassword());
-            authenticationResponse = this.authenticationManager.authenticate(authenticationRequest);
-        } catch (Exception e) {
-            user.setLoginAttempts(user.getLoginAttempts() + 1);
-            userRepository.save(user);
-            throw new SecurityException(errorMessage);
-        }
+        String username = request.getUsername();
+        String password = request.getPassword();
 
-        // Reset login attempts on successful authentication
-        if (user.getLoginAttempts() > 0) {
-            user.setLoginAttempts(0);
-            userRepository.save(user);
+        Store store;
+
+        if (role == AppConstant.AuthRole.ADMIN) {
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new SecurityException(AppConstant.INVALID_USERNAME_OR_PASSWORD));
+
+            authenticationResponse = authenticateAndTrackAttempts(user, username, password, userRepository);
+            store = user.getStore();
+        } else {
+            Customer customer = customerRepository.findByUsername(username)
+                    .orElseThrow(() -> new SecurityException(AppConstant.INVALID_USERNAME_OR_PASSWORD));
+
+            authenticationResponse = authenticateAndTrackAttempts(customer, username, password, customerRepository);
+            store = customer.getStore();
         }
 
         SecurityContextHolder.getContext().setAuthentication(authenticationResponse);
-        String token = jwtService.generateToken(user.getUsername(), user.getStore().getName());
+        String token = jwtService.generateToken(username, role == AppConstant.AuthRole.ADMIN ? "public" : store.getName());
         return new LoginResponse(token);
     }
 
-    @Override
-    public void signup(SignupRequest request) {
-        if (userRepository.findByUsername(request.getUsername()).isPresent()) {
-            throw new EntityExistsException("Username already used");
+    private <T extends LoginTrackable> Authentication authenticateAndTrackAttempts(
+            T entity, String username, String password, JpaRepository<T, UUID> repository) {
+
+        if (entity.getLoginAttempts() >= 3) {
+            throw new SecurityException(AppConstant.ACCOUNT_LOCKED);
         }
 
-        User user = new User();
-        user.setUsername(request.getUsername());
-        user.setEmail(request.getEmail());
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        Authentication authenticationRequest;
+        Authentication authenticationResponse;
+        try {
+            authenticationRequest = UsernamePasswordAuthenticationToken.unauthenticated(username, password);
+            authenticationResponse = this.authenticationManager.authenticate(authenticationRequest);
+        } catch (Exception e) {
+            entity.setLoginAttempts(entity.getLoginAttempts() + 1);
+            repository.save(entity);
+            throw new SecurityException(AppConstant.INVALID_USERNAME_OR_PASSWORD);
 
-        Store store = new Store();
-        String storeName = request.getStore().getName();
-        store.setName(storeName);
-        store.setLocation(request.getStore().getLocation());
-        user.setStore(store);
+        }
 
-        String schemaName = storeName.trim().toLowerCase().replaceAll("\\s+", "_");
-        String createSchemaQuery = "CREATE SCHEMA IF NOT EXISTS " + schemaName;
-        jdbcTemplate.execute(createSchemaQuery);
+        if (entity.getLoginAttempts() > 0) {
+            entity.setLoginAttempts(0);
+            repository.save(entity);
+        }
+        return authenticationResponse;
+    }
 
-        Flyway flyway = Flyway.configure()
-                .dataSource(jdbcTemplate.getDataSource())
-                .schemas(schemaName)
-                .locations("classpath:db/migration/tenant")
-                .load();
 
-        flyway.migrate();
-        userRepository.save(user);
+    @Override
+    public void signup(SignupRequest request, AppConstant.AuthRole role) {
+        if (role == AppConstant.AuthRole.ADMIN) {
+            if (userRepository.findByUsername(request.getUsername()).isPresent()) {
+                throw new EntityExistsException("Username already used");
+            }
+
+            User user = new User();
+            user.setUsername(request.getUsername());
+            user.setEmail(request.getEmail());
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+            user.setStore(null);
+            userRepository.save(user);
+        } else {
+            if (customerRepository.findByUsername(request.getUsername()).isPresent()) {
+                throw new EntityExistsException("Username already used");
+            }
+
+            Store store = storeRepository.findById(request.getStoreId())
+                    .orElseThrow(() -> new EntityNotFoundException("Store not found with ID: " + request.getStoreId()));
+
+            Customer customer = new Customer();
+            customer.setUsername(request.getUsername());
+            customer.setEmail(request.getEmail());
+            customer.setPassword(passwordEncoder.encode(request.getPassword()));
+            customer.setStore(store);
+            customerRepository.save(customer);
+        }
     }
 
     @Override
     @Transactional
-    public void forgotPassword(ForgotPasswordRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new EntityNotFoundException("User not found with email: " + request.getEmail()));
+    public void forgotPassword(ForgotPasswordRequest request, AppConstant.AuthRole role) {
+        String email = request.getEmail();
+        if (role == AppConstant.AuthRole.ADMIN) {
+            userRepository.findByEmail(email)
+                    .orElseThrow(() -> new EntityNotFoundException("User not found with email: " + email));
+        } else {
+            customerRepository.findByEmail(email)
+                    .orElseThrow(() -> new EntityNotFoundException("Customer not found with email: " + email));
+        }
 
         // Generate OTP (6 digit)
         String otp = generateOTP();
 
         // Check if OTP already exists for the user
-        userOTPRepository.findByEmail(user.getEmail()).ifPresent(userOTPRepository::delete);
+        userOTPRepository.findByEmail(email).ifPresent(userOTPRepository::delete);
 
         // Create new OTP entry
         UserOTP userOTP = new UserOTP();
-        userOTP.setEmail(user.getEmail());
+        userOTP.setEmail(email);
         userOTP.setOtp(otp);
         userOTP.setExpirationTime(LocalDateTime.now().plusMinutes(30)); // 30 minutes expiry
         userOTP.setVerified(false);
@@ -148,7 +180,7 @@ public class AuthServiceImpl implements AuthService {
         userOTPRepository.save(userOTP);
 
         try {
-            mailUtil.sendOtpEmail(user.getEmail(), otp);
+            mailUtil.sendOtpEmail(email, otp);
         } catch (MessagingException e) {
             throw new RuntimeException("Failed to send OTP email", e);
         }
@@ -156,7 +188,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public void resetPassword(ResetPasswordRequest request) {
+    public void resetPassword(ResetPasswordRequest request, AppConstant.AuthRole role) {
         // Verify OTP first
         VerifyOtpRequest verifyRequest = new VerifyOtpRequest(request.getEmail(), request.getOtp());
         boolean verified = verifyOtp(verifyRequest);
@@ -165,13 +197,23 @@ public class AuthServiceImpl implements AuthService {
             throw new SecurityException("Invalid or expired OTP");
         }
 
-        // Update password
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new EntityNotFoundException("User not found with email: " + request.getEmail()));
+        if (role == AppConstant.AuthRole.ADMIN) {
+            // Update password
+            User user = userRepository.findByEmail(request.getEmail())
+                    .orElseThrow(() -> new EntityNotFoundException("User not found with email: " + request.getEmail()));
 
-        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        user.setLoginAttempts(0); // Reset login attempts
-        userRepository.save(user);
+            user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            user.setLoginAttempts(0); // Reset login attempts
+            userRepository.save(user);
+        } else {
+            // Update password
+            Customer customer = customerRepository.findByEmail(request.getEmail())
+                    .orElseThrow(() -> new EntityNotFoundException("Customer not found with email: " + request.getEmail()));
+
+            customer.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            customer.setLoginAttempts(0); // Reset login attempts
+            customerRepository.save(customer);
+        }
 
         // Delete the used OTP
         userOTPRepository.findByEmail(request.getEmail()).ifPresent(userOTPRepository::delete);

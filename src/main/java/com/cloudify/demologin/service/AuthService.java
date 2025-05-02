@@ -6,13 +6,14 @@ import com.cloudify.demologin.dto.request.ResetPasswordRequest;
 import com.cloudify.demologin.dto.request.SignupRequest;
 import com.cloudify.demologin.dto.request.VerifyOtpRequest;
 import com.cloudify.demologin.dto.response.LoginResponse;
+import com.cloudify.demologin.util.AppConstant;
 
 public interface AuthService {
-    LoginResponse login(LoginRequest request);
+    LoginResponse login(LoginRequest request, AppConstant.AuthRole role);
 
-    void signup(SignupRequest request);
-    
-    void forgotPassword(ForgotPasswordRequest request);
-    
-    void resetPassword(ResetPasswordRequest request);
+    void signup(SignupRequest request, AppConstant.AuthRole role);
+
+    void forgotPassword(ForgotPasswordRequest request, AppConstant.AuthRole role);
+
+    void resetPassword(ResetPasswordRequest request, AppConstant.AuthRole role);
 }

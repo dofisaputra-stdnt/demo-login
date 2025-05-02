@@ -46,6 +46,8 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests((auth) ->
                         auth.requestMatchers(AuthHelper.PUBLIC_PATHS).permitAll()
+                                .requestMatchers("/api/stores/**").hasRole("ADMIN")
+                                .requestMatchers("/api/products/**").hasRole("CUSTOMER")
                                 .anyRequest().authenticated()
                 )
                 .sessionManagement(manager -> manager
