@@ -56,13 +56,13 @@ public class AdvisorController {
                 .build();
     }
 
-//    @ExceptionHandler(value = MethodArgumentTypeMismatchException.class)
-//    @ResponseStatus(HttpStatus.BAD_REQUEST)
-//    public BaseResponse<?> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException e) {
-//        return BaseResponse.builder()
-//                .message("Invalid argument type: " + e.getName())
-//                .build();
-//    }
+    @ExceptionHandler(value = MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public BaseResponse<?> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException e) {
+        return BaseResponse.builder()
+                .message("Invalid argument type: " + e.getName())
+                .build();
+    }
 
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
