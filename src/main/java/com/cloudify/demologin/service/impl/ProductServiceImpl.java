@@ -1,5 +1,6 @@
 package com.cloudify.demologin.service.impl;
 
+import com.cloudify.demologin.config.kafka.producer.ProductEventProducer;
 import com.cloudify.demologin.dto.request.ProductRequest;
 import com.cloudify.demologin.dto.response.PageResponse;
 import com.cloudify.demologin.dto.response.ProductResponse;
@@ -25,11 +26,17 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final MinioUtil minioUtil;
     private final ImageUtil imageUtil;
+    private final ProductEventProducer productEventProducer;
 
-    public ProductServiceImpl(ProductRepository productRepository, MinioUtil minioUtil, ImageUtil imageUtil) {
+    public ProductServiceImpl(
+            ProductRepository productRepository, 
+            MinioUtil minioUtil, 
+            ImageUtil imageUtil,
+            ProductEventProducer productEventProducer) {
         this.productRepository = productRepository;
         this.minioUtil = minioUtil;
         this.imageUtil = imageUtil;
+        this.productEventProducer = productEventProducer;
     }
 
     @Value("${minio.bucket.product}")
@@ -44,6 +51,9 @@ public class ProductServiceImpl implements ProductService {
         product.setDescription(request.getDescription());
         productRepository.save(product);
         saveProductImage(file, product);
+        
+        // Send Kafka event for product creation
+        productEventProducer.sendProductCreatedEvent(product);
     }
 
     @Override
@@ -92,6 +102,9 @@ public class ProductServiceImpl implements ProductService {
         existingProduct.setPrice(product.getPrice());
         existingProduct.setDescription(product.getDescription());
         saveProductImage(file, existingProduct);
+        
+        // Send Kafka event for product update
+        productEventProducer.sendProductUpdatedEvent(existingProduct);
     }
 
     private void saveProductImage(MultipartFile file, Product existingProduct) {

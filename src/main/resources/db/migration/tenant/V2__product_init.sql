@@ -6,4 +6,4 @@ CREATE TABLE products
     price       DOUBLE PRECISION NOT NULL,
     description TEXT,
     image_url   VARCHAR(255)
-);
+); 
