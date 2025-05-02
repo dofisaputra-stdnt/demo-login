@@ -16,6 +16,7 @@ import com.cloudify.demologin.repository.UserOTPRepository;
 import com.cloudify.demologin.repository.UserRepository;
 import com.cloudify.demologin.security.JwtService;
 import com.cloudify.demologin.service.AuthService;
+import com.cloudify.demologin.util.MQUtil;
 import com.cloudify.demologin.util.AppConstant;
 import com.cloudify.demologin.util.LoginTrackable;
 import com.cloudify.demologin.util.MailUtil;
@@ -45,6 +46,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final UserOTPRepository userOTPRepository;
     private final MailUtil mailUtil;
+    private final MQUtil mqUtil;
     private final Random random = new SecureRandom();
     private final StoreRepository storeRepository;
     private final CustomerRepository customerRepository;
@@ -56,6 +58,7 @@ public class AuthServiceImpl implements AuthService {
             UserRepository userRepository,
             UserOTPRepository userOTPRepository,
             MailUtil mailUtil,
+            MQUtil mqUtil,
             StoreRepository storeRepository,
             CustomerRepository customerRepository) {
         this.authenticationManager = authenticationManager;
@@ -64,6 +67,7 @@ public class AuthServiceImpl implements AuthService {
         this.userRepository = userRepository;
         this.userOTPRepository = userOTPRepository;
         this.mailUtil = mailUtil;
+        this.mqUtil = mqUtil;
         this.storeRepository = storeRepository;
         this.customerRepository = customerRepository;
     }
@@ -76,22 +80,36 @@ public class AuthServiceImpl implements AuthService {
 
         Store store;
 
+        String user_id;
+        String user_email;
+
         if (role == AppConstant.AuthRole.ADMIN) {
             User user = userRepository.findByUsername(username)
                     .orElseThrow(() -> new SecurityException(AppConstant.INVALID_USERNAME_OR_PASSWORD));
 
             authenticationResponse = authenticateAndTrackAttempts(user, username, password, userRepository);
             store = user.getStore();
+
+            user_id = user.getId().toString();
+            user_email = user.getEmail();
         } else {
             Customer customer = customerRepository.findByUsername(username)
                     .orElseThrow(() -> new SecurityException(AppConstant.INVALID_USERNAME_OR_PASSWORD));
 
             authenticationResponse = authenticateAndTrackAttempts(customer, username, password, customerRepository);
             store = customer.getStore();
+
+            user_id = customer.getId().toString();
+            user_email = customer.getEmail();
         }
 
         SecurityContextHolder.getContext().setAuthentication(authenticationResponse);
         String token = jwtService.generateToken(username, role == AppConstant.AuthRole.ADMIN ? "public" : store.getName());
+
+        // Send user success log to rabbitmq pipe
+        this.mqUtil.setQueue("apps-log", "apps-log-exch");
+        this.mqUtil.sendMessage(String.format("login_success|%s|%s", user_id, user_email));
+
         return new LoginResponse(token);
     }
 
